@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Circle, AlertTriangle, Calendar, DollarSign, Home, Building, Clock, Target, Edit3, BarChart3, TrendingUp, ChevronDown, ChevronUp, List, Download, Upload } from 'lucide-react';
+import { CheckCircle, Circle, AlertTriangle, Calendar, DollarSign, Home, Building, Clock, Target, Edit3, BarChart3, TrendingUp, ChevronDown, ChevronUp, List, Download, Upload, Plus, Minus, Save, X } from 'lucide-react';
 
 const DuplexProjectManager = () => {
   const [completedTasks, setCompletedTasks] = useState(new Set());
@@ -8,21 +8,21 @@ const DuplexProjectManager = () => {
   const [showGantt, setShowGantt] = useState(false);
   const [showBudgetTracker, setShowBudgetTracker] = useState(false);
   const [actualCosts, setActualCosts] = useState(new Map());
+  const [editingTask, setEditingTask] = useState(null);
+  const [customTasks, setCustomTasks] = useState([]);
+  const [showAddTask, setShowAddTask] = useState(false);
 
   // Auto-save and load data from localStorage
   useEffect(() => {
     try {
-      // Load saved data when app starts
       const savedTasks = localStorage.getItem('duplex-completed-tasks');
       const savedCosts = localStorage.getItem('duplex-actual-costs');
       const savedPhase = localStorage.getItem('duplex-selected-phase');
-      
-      console.log('Loading data:', { savedTasks, savedCosts, savedPhase }); // Debug log
+      const savedCustomTasks = localStorage.getItem('duplex-custom-tasks');
       
       if (savedTasks) {
         const taskArray = JSON.parse(savedTasks);
         setCompletedTasks(new Set(taskArray));
-        console.log('Loaded tasks:', taskArray);
       }
       if (savedCosts) {
         const costsObject = JSON.parse(savedCosts);
@@ -31,10 +31,12 @@ const DuplexProjectManager = () => {
           costsMap.set(key, value);
         });
         setActualCosts(costsMap);
-        console.log('Loaded costs:', costsObject);
       }
       if (savedPhase) {
         setSelectedPhase(savedPhase);
+      }
+      if (savedCustomTasks) {
+        setCustomTasks(JSON.parse(savedCustomTasks));
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -43,11 +45,10 @@ const DuplexProjectManager = () => {
 
   // Auto-save whenever data changes
   useEffect(() => {
-    if (completedTasks.size > 0) { // Only save if there's actual data
+    if (completedTasks.size > 0) {
       try {
         const taskArray = Array.from(completedTasks);
         localStorage.setItem('duplex-completed-tasks', JSON.stringify(taskArray));
-        console.log('Saved tasks:', taskArray); // Debug log
       } catch (error) {
         console.error('Error saving tasks:', error);
       }
@@ -55,14 +56,13 @@ const DuplexProjectManager = () => {
   }, [completedTasks]);
 
   useEffect(() => {
-    if (actualCosts.size > 0) { // Only save if there's actual data
+    if (actualCosts.size > 0) {
       try {
         const costsObject = {};
         actualCosts.forEach((value, key) => {
           costsObject[key] = value;
         });
         localStorage.setItem('duplex-actual-costs', JSON.stringify(costsObject));
-        console.log('Saved costs:', costsObject); // Debug log
       } catch (error) {
         console.error('Error saving costs:', error);
       }
@@ -77,12 +77,21 @@ const DuplexProjectManager = () => {
     }
   }, [selectedPhase]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('duplex-custom-tasks', JSON.stringify(customTasks));
+    } catch (error) {
+      console.error('Error saving custom tasks:', error);
+    }
+  }, [customTasks]);
+
   // Export/Import functionality
   const exportData = () => {
     const data = {
       completedTasks: [...completedTasks],
       actualCosts: Object.fromEntries(actualCosts),
       selectedPhase: selectedPhase,
+      customTasks: customTasks,
       exportDate: new Date().toISOString(),
       projectName: 'Duplex Renovation Project'
     };
@@ -106,6 +115,7 @@ const DuplexProjectManager = () => {
           setCompletedTasks(new Set(data.completedTasks || []));
           setActualCosts(new Map(Object.entries(data.actualCosts || {})));
           setSelectedPhase(data.selectedPhase || 'phase1');
+          setCustomTasks(data.customTasks || []);
           alert('Data imported successfully!');
         } catch (error) {
           alert('Error importing data. Please check the file format.');
@@ -117,122 +127,76 @@ const DuplexProjectManager = () => {
 
   // Updated financial parameters with correct rental rates
   const monthlyCarryingCosts = 4854.17;
-  const mainFloorIncome = 3500; // $1750 average for 3BR main floors
+  const mainFloorIncome = 3500;
   const currentMonthlyLoss = monthlyCarryingCosts - mainFloorIncome;
-  const fullRentalIncome = 5700; // All 4 units
-  const postRefiSurplus = fullRentalIncome - 3200; // After refinance
+  const fullRentalIncome = 5700;
+  const postRefiSurplus = fullRentalIncome - 3200;
 
-  // Master task list in proper execution order
-  const masterTaskList = [
-    // IMMEDIATE SAFETY & HABITABILITY (Sep 15 - Oct 1)
-    { id: 'struct_engineer_consult', name: 'Emergency structural engineer consultation', phase: 'Safety', critical: true, trades: ['Engineer'], cost: 2500, days: 2 },
-    { id: 'emergency_permits', name: 'File emergency building permits', phase: 'Safety', critical: true, trades: ['Admin'], cost: 400, days: 1 },
-    { id: 'sump_pump_repair', name: 'Repair sump pump systems', phase: 'Safety', critical: true, trades: ['Plumber'], cost: 2000, days: 2 },
-    { id: 'plumbing_safety_fix', name: 'Install missing caps, fix hazards', phase: 'Safety', critical: true, trades: ['Plumber'], cost: 800, days: 1 },
-    { id: 'electrical_safety_fix', name: 'Fix wiring hazards, label panels', phase: 'Safety', critical: true, trades: ['Electrician'], cost: 1200, days: 2 },
-    { id: 'appliance_order', name: 'Order appliances for main floors', phase: 'Safety', critical: true, trades: ['Admin'], cost: 4500, days: 1 },
+  // Base template tasks - these are protected
+  const baseTemplateTasks = [
+    { id: 'struct_engineer_consult', name: 'Emergency structural engineer consultation', phase: 'Safety', critical: true, trades: ['Engineer'], cost: 2500, days: 2, isTemplate: true },
+    { id: 'emergency_permits', name: 'File emergency building permits', phase: 'Safety', critical: true, trades: ['Admin'], cost: 400, days: 1, isTemplate: true },
+    { id: 'sump_pump_repair', name: 'Repair sump pump systems', phase: 'Safety', critical: true, trades: ['Plumber'], cost: 2000, days: 2, isTemplate: true },
+    { id: 'plumbing_safety_fix', name: 'Install missing caps, fix hazards', phase: 'Safety', critical: true, trades: ['Plumber'], cost: 800, days: 1, isTemplate: true },
+    { id: 'electrical_safety_fix', name: 'Fix wiring hazards, label panels', phase: 'Safety', critical: true, trades: ['Electrician'], cost: 1200, days: 2, isTemplate: true },
+    { id: 'appliance_order', name: 'Order appliances for main floors', phase: 'Safety', critical: true, trades: ['Admin'], cost: 4500, days: 1, isTemplate: true },
+    { id: 'lvp_11832', name: 'Install LVP flooring 11832 main', phase: 'Safety', critical: true, trades: ['Flooring'], cost: 2800, days: 2, isTemplate: true },
+    { id: 'carpet_11834', name: 'Install carpet 11834 main', phase: 'Safety', critical: true, trades: ['Flooring'], cost: 1500, days: 1, isTemplate: true },
+    { id: 'appliance_install', name: 'Install main floor appliances', phase: 'Safety', critical: true, trades: ['Appliance Tech'], cost: 800, days: 2, isTemplate: true },
+    { id: 'attic_insulation', name: 'Install attic insulation', phase: 'Safety', critical: true, trades: ['Insulation'], cost: 4000, days: 2, isTemplate: true },
+    { id: 'main_floor_clean', name: 'Professional cleaning', phase: 'Safety', critical: true, trades: ['Cleaner'], cost: 800, days: 1, isTemplate: true },
+    { id: 'safety_inspection', name: 'Safety inspection & occupancy', phase: 'Safety', critical: true, trades: ['Inspector'], cost: 200, days: 1, isTemplate: true },
     
-    // MAIN FLOOR FINISHING
-    { id: 'lvp_11832', name: 'Install LVP flooring 11832 main', phase: 'Safety', critical: true, trades: ['Flooring'], cost: 2800, days: 2 },
-    { id: 'carpet_11834', name: 'Install carpet 11834 main', phase: 'Safety', critical: true, trades: ['Flooring'], cost: 1500, days: 1 },
-    { id: 'appliance_install', name: 'Install main floor appliances', phase: 'Safety', critical: true, trades: ['Appliance Tech'], cost: 800, days: 2 },
-    { id: 'attic_insulation', name: 'Install attic insulation', phase: 'Safety', critical: true, trades: ['Insulation'], cost: 4000, days: 2 },
-    { id: 'main_floor_clean', name: 'Professional cleaning', phase: 'Safety', critical: true, trades: ['Cleaner'], cost: 800, days: 1 },
-    { id: 'safety_inspection', name: 'Safety inspection & occupancy', phase: 'Safety', critical: true, trades: ['Inspector'], cost: 200, days: 1 },
+    // PERMITS PHASE
+    { id: 'architect_rush', name: 'Rush architect plans (both suites)', phase: 'Permits', critical: true, trades: ['Architect'], cost: 4500, days: 10, isTemplate: true },
+    { id: 'structural_engineer_suite', name: 'Structural engineer for egress', phase: 'Permits', critical: true, trades: ['Engineer'], cost: 1500, days: 5, isTemplate: true },
+    { id: 'development_permits', name: 'Submit development permits', phase: 'Permits', critical: true, trades: ['Admin'], cost: 500, days: 2, isTemplate: true },
+    { id: 'building_permits_suite', name: 'Submit building permits', phase: 'Permits', critical: true, trades: ['Admin'], cost: 1000, days: 7, isTemplate: true },
+    { id: 'material_bulk_order', name: 'Bulk order all suite materials', phase: 'Permits', critical: false, trades: ['Admin'], cost: 0, days: 3, isTemplate: true },
     
-    // SUITE PLANNING & PERMITS (Oct 1 - Nov 1)
-    { id: 'architect_rush', name: 'Rush architect plans (both suites)', phase: 'Permits', critical: true, trades: ['Architect'], cost: 4500, days: 10 },
-    { id: 'structural_engineer_suite', name: 'Structural engineer for egress', phase: 'Permits', critical: true, trades: ['Engineer'], cost: 1500, days: 5 },
-    { id: 'development_permits', name: 'Submit development permits', phase: 'Permits', critical: true, trades: ['Admin'], cost: 500, days: 2 },
-    { id: 'building_permits_suite', name: 'Submit building permits', phase: 'Permits', critical: true, trades: ['Admin'], cost: 1000, days: 7 },
-    { id: 'material_bulk_order', name: 'Bulk order all suite materials', phase: 'Permits', critical: false, trades: ['Admin'], cost: 0, days: 3 },
+    // ROUGH-IN PHASE
+    { id: 'egress_windows_cut', name: 'Cut egress windows (both suites)', phase: 'Rough-in', critical: true, trades: ['Concrete', 'Glazier'], cost: 9000, days: 5, isTemplate: true },
+    { id: 'structural_framing', name: 'Frame walls/ceilings (both suites)', phase: 'Rough-in', critical: true, trades: ['Framer'], cost: 7000, days: 8, isTemplate: true },
+    { id: 'electrical_rough_both', name: 'Electrical rough-in (separate panels)', phase: 'Rough-in', critical: true, trades: ['Electrician'], cost: 6000, days: 6, isTemplate: true },
+    { id: 'plumbing_rough_both', name: 'Plumbing rough-in (both suites)', phase: 'Rough-in', critical: true, trades: ['Plumber'], cost: 7000, days: 8, isTemplate: true },
+    { id: 'hvac_rough_both', name: 'HVAC systems (both suites)', phase: 'Rough-in', critical: true, trades: ['HVAC'], cost: 2500, days: 4, isTemplate: true },
+    { id: 'rough_inspections', name: 'All rough-in inspections', phase: 'Rough-in', critical: true, trades: ['Inspector'], cost: 500, days: 2, isTemplate: true },
     
-    // ROUGH-IN PHASE (Nov 1 - Dec 20) - BOTH SUITES SIMULTANEOUSLY
-    { id: 'egress_windows_cut', name: 'Cut egress windows (both suites)', phase: 'Rough-in', critical: true, trades: ['Concrete', 'Glazier'], cost: 9000, days: 5 },
-    { id: 'structural_framing', name: 'Frame walls/ceilings (both suites)', phase: 'Rough-in', critical: true, trades: ['Framer'], cost: 7000, days: 8 },
-    { id: 'electrical_rough_both', name: 'Electrical rough-in (separate panels)', phase: 'Rough-in', critical: true, trades: ['Electrician'], cost: 6000, days: 6 },
-    { id: 'plumbing_rough_both', name: 'Plumbing rough-in (both suites)', phase: 'Rough-in', critical: true, trades: ['Plumber'], cost: 7000, days: 8 },
-    { id: 'hvac_rough_both', name: 'HVAC systems (both suites)', phase: 'Rough-in', critical: true, trades: ['HVAC'], cost: 2500, days: 4 },
-    { id: 'rough_inspections', name: 'All rough-in inspections', phase: 'Rough-in', critical: true, trades: ['Inspector'], cost: 500, days: 2 },
+    // FINISH 11832 PHASE
+    { id: 'insulation_11832', name: 'Insulation/vapor barrier 11832', phase: 'Finish 11832', critical: false, trades: ['Insulation'], cost: 1800, days: 3, isTemplate: true },
+    { id: 'drywall_11832', name: 'Drywall installation 11832', phase: 'Finish 11832', critical: false, trades: ['Drywall'], cost: 3500, days: 8, isTemplate: true },
+    { id: 'flooring_11832_suite', name: 'LVP flooring 11832 suite', phase: 'Finish 11832', critical: false, trades: ['Flooring'], cost: 2200, days: 3, isTemplate: true },
+    { id: 'kitchen_cabinets_11832', name: 'Kitchen cabinets 11832', phase: 'Finish 11832', critical: false, trades: ['Cabinet'], cost: 3000, days: 3, isTemplate: true },
+    { id: 'countertops_11832', name: 'Countertops 11832', phase: 'Finish 11832', critical: false, trades: ['Countertop'], cost: 1000, days: 2, isTemplate: true },
+    { id: 'bathroom_11832', name: 'Bathroom completion 11832', phase: 'Finish 11832', critical: false, trades: ['Plumber', 'Tiler'], cost: 2500, days: 5, isTemplate: true },
+    { id: 'appliances_11832_suite', name: 'Suite appliances 11832', phase: 'Finish 11832', critical: false, trades: ['Appliance Tech'], cost: 2000, days: 1, isTemplate: true },
+    { id: 'electrical_final_11832', name: 'Final electrical 11832', phase: 'Finish 11832', critical: false, trades: ['Electrician'], cost: 500, days: 2, isTemplate: true },
+    { id: 'paint_11832', name: 'Paint & trim 11832', phase: 'Finish 11832', critical: false, trades: ['Painter'], cost: 1200, days: 3, isTemplate: true },
     
-    // SUITE 11832 FINISHING (Dec 20 - Jan 20)
-    { id: 'insulation_11832', name: 'Insulation/vapor barrier 11832', phase: 'Finish 11832', critical: false, trades: ['Insulation'], cost: 1800, days: 3 },
-    { id: 'drywall_11832', name: 'Drywall installation 11832', phase: 'Finish 11832', critical: false, trades: ['Drywall'], cost: 3500, days: 8 },
-    { id: 'flooring_11832_suite', name: 'LVP flooring 11832 suite', phase: 'Finish 11832', critical: false, trades: ['Flooring'], cost: 2200, days: 3 },
-    { id: 'kitchen_cabinets_11832', name: 'Kitchen cabinets 11832', phase: 'Finish 11832', critical: false, trades: ['Cabinet'], cost: 3000, days: 3 },
-    { id: 'countertops_11832', name: 'Countertops 11832', phase: 'Finish 11832', critical: false, trades: ['Countertop'], cost: 1000, days: 2 },
-    { id: 'bathroom_11832', name: 'Bathroom completion 11832', phase: 'Finish 11832', critical: false, trades: ['Plumber', 'Tiler'], cost: 2500, days: 5 },
-    { id: 'appliances_11832_suite', name: 'Suite appliances 11832', phase: 'Finish 11832', critical: false, trades: ['Appliance Tech'], cost: 2000, days: 1 },
-    { id: 'electrical_final_11832', name: 'Final electrical 11832', phase: 'Finish 11832', critical: false, trades: ['Electrician'], cost: 500, days: 2 },
-    { id: 'paint_11832', name: 'Paint & trim 11832', phase: 'Finish 11832', critical: false, trades: ['Painter'], cost: 1200, days: 3 },
+    // FINISH 11834 PHASE
+    { id: 'insulation_11834', name: 'Insulation/vapor barrier 11834', phase: 'Finish 11834', critical: false, trades: ['Insulation'], cost: 1500, days: 2, isTemplate: true },
+    { id: 'drywall_11834', name: 'Drywall installation 11834', phase: 'Finish 11834', critical: false, trades: ['Drywall'], cost: 3000, days: 6, isTemplate: true },
+    { id: 'flooring_11834_suite', name: 'LVP flooring 11834 suite', phase: 'Finish 11834', critical: false, trades: ['Flooring'], cost: 2000, days: 2, isTemplate: true },
+    { id: 'kitchen_11834', name: 'Kitchen installation 11834', phase: 'Finish 11834', critical: false, trades: ['Cabinet', 'Countertop'], cost: 3500, days: 3, isTemplate: true },
+    { id: 'bathroom_11834', name: 'Bathroom completion 11834', phase: 'Finish 11834', critical: false, trades: ['Plumber', 'Tiler'], cost: 2500, days: 4, isTemplate: true },
+    { id: 'appliances_11834_suite', name: 'Suite appliances 11834', phase: 'Finish 11834', critical: false, trades: ['Appliance Tech'], cost: 1800, days: 1, isTemplate: true },
+    { id: 'electrical_final_11834', name: 'Final electrical 11834', phase: 'Finish 11834', critical: false, trades: ['Electrician'], cost: 500, days: 2, isTemplate: true },
+    { id: 'paint_11834', name: 'Paint & trim 11834', phase: 'Finish 11834', critical: false, trades: ['Painter'], cost: 1000, days: 2, isTemplate: true },
     
-    // SUITE 11834 FINISHING (Jan 20 - Jan 31)
-    { id: 'insulation_11834', name: 'Insulation/vapor barrier 11834', phase: 'Finish 11834', critical: false, trades: ['Insulation'], cost: 1500, days: 2 },
-    { id: 'drywall_11834', name: 'Drywall installation 11834', phase: 'Finish 11834', critical: false, trades: ['Drywall'], cost: 3000, days: 6 },
-    { id: 'flooring_11834_suite', name: 'LVP flooring 11834 suite', phase: 'Finish 11834', critical: false, trades: ['Flooring'], cost: 2000, days: 2 },
-    { id: 'kitchen_11834', name: 'Kitchen installation 11834', phase: 'Finish 11834', critical: false, trades: ['Cabinet', 'Countertop'], cost: 3500, days: 3 },
-    { id: 'bathroom_11834', name: 'Bathroom completion 11834', phase: 'Finish 11834', critical: false, trades: ['Plumber', 'Tiler'], cost: 2500, days: 4 },
-    { id: 'appliances_11834_suite', name: 'Suite appliances 11834', phase: 'Finish 11834', critical: false, trades: ['Appliance Tech'], cost: 1800, days: 1 },
-    { id: 'electrical_final_11834', name: 'Final electrical 11834', phase: 'Finish 11834', critical: false, trades: ['Electrician'], cost: 500, days: 2 },
-    { id: 'paint_11834', name: 'Paint & trim 11834', phase: 'Finish 11834', critical: false, trades: ['Painter'], cost: 1000, days: 2 },
-    
-    // FINAL COMPLETION
-    { id: 'final_inspections_both', name: 'Final inspections both suites', phase: 'Completion', critical: true, trades: ['Inspector'], cost: 500, days: 1 },
-    { id: 'exterior_touchups', name: 'Exterior repairs & cleanup', phase: 'Completion', critical: false, trades: ['General'], cost: 2000, days: 3 },
-    { id: 'landscaping', name: 'Landscaping & curb appeal', phase: 'Completion', critical: false, trades: ['Landscaper'], cost: 1500, days: 2 },
-    { id: 'final_cleaning', name: 'Final professional cleaning', phase: 'Completion', critical: false, trades: ['Cleaner'], cost: 600, days: 1 }
+    // COMPLETION PHASE
+    { id: 'final_inspections_both', name: 'Final inspections both suites', phase: 'Completion', critical: true, trades: ['Inspector'], cost: 500, days: 1, isTemplate: true },
+    { id: 'exterior_touchups', name: 'Exterior repairs & cleanup', phase: 'Completion', critical: false, trades: ['General'], cost: 2000, days: 3, isTemplate: true },
+    { id: 'landscaping', name: 'Landscaping & curb appeal', phase: 'Completion', critical: false, trades: ['Landscaper'], cost: 1500, days: 2, isTemplate: true },
+    { id: 'final_cleaning', name: 'Final professional cleaning', phase: 'Completion', critical: false, trades: ['Cleaner'], cost: 600, days: 1, isTemplate: true }
   ];
 
-  // Updated project phases
-  const phases = {
-    phase1: {
-      name: 'Main Floor Habitability (Sep 15 - Oct 1)',
-      deadline: 'Oct 1, 2025',
-      budget: 29000,
-      color: 'bg-red-100 border-red-300',
-      priority: 'CRITICAL',
-      description: 'Get main floors rented ASAP - $1,354/month savings!',
-      tasks: masterTaskList.slice(0, 12) // First 12 tasks
-    },
-    phase2: {
-      name: 'Suite Permits & Design (Oct 1 - Nov 1)',
-      deadline: 'Nov 1, 2025',
-      budget: 7500,
-      color: 'bg-yellow-100 border-yellow-300',
-      priority: 'CRITICAL',
-      description: 'Fast-track permits for simultaneous construction',
-      tasks: masterTaskList.slice(12, 17) // Next 5 tasks
-    },
-    phase3: {
-      name: 'Simultaneous Rough-In (Both Suites) (Nov 1 - Dec 20)',
-      deadline: 'Dec 20, 2025',
-      budget: 32000,
-      color: 'bg-blue-100 border-blue-300',
-      priority: 'HIGH',
-      description: 'Maximum efficiency - both suites together',
-      tasks: masterTaskList.slice(17, 23) // Rough-in tasks
-    },
-    phase4: {
-      name: 'Suite 11832 Finish (Dec 20 - Jan 20)',
-      deadline: 'Jan 20, 2026',
-      budget: 17700,
-      color: 'bg-green-100 border-green-300',
-      priority: 'MEDIUM',
-      description: 'Complete first suite for immediate rental',
-      tasks: masterTaskList.slice(23, 32) // 11832 finishing
-    },
-    phase5: {
-      name: 'Suite 11834 Finish (Jan 20 - Jan 31)',
-      deadline: 'Jan 31, 2026',
-      budget: 15800,
-      color: 'bg-purple-100 border-purple-300',
-      priority: 'MEDIUM',
-      description: 'Complete second suite to maximize income',
-      tasks: masterTaskList.slice(32, 47) // 11834 finishing + completion
-    }
-  };
+  // Combine template tasks with custom tasks
+  const allTasks = [...baseTemplateTasks, ...customTasks];
 
-  // Helper functions
+  // Available phases for dropdown
+  const availablePhases = ['Safety', 'Permits', 'Rough-in', 'Finish 11832', 'Finish 11834', 'Completion', 'Custom'];
+
+  // Task management functions
   const toggleTask = (taskId) => {
     const newCompleted = new Set(completedTasks);
     if (newCompleted.has(taskId)) {
@@ -253,24 +217,133 @@ const DuplexProjectManager = () => {
     setActualCosts(newActualCosts);
   };
 
+  const startEditingTask = (task) => {
+    setEditingTask({
+      ...task,
+      tradesString: task.trades.join(', ')
+    });
+  };
+
+  const saveTaskEdit = () => {
+    if (!editingTask) return;
+    
+    const updatedTask = {
+      ...editingTask,
+      trades: editingTask.tradesString.split(',').map(t => t.trim()).filter(t => t),
+      cost: parseFloat(editingTask.cost) || 0,
+      days: parseInt(editingTask.days) || 1
+    };
+
+    if (editingTask.isTemplate) {
+      alert('Template tasks cannot be modified. Please create a custom task instead.');
+    } else {
+      const updatedCustomTasks = customTasks.map(task => 
+        task.id === editingTask.id ? updatedTask : task
+      );
+      setCustomTasks(updatedCustomTasks);
+    }
+    
+    setEditingTask(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingTask(null);
+  };
+
+  const deleteTask = (taskId) => {
+    if (window.confirm('Are you sure you want to delete this task?')) {
+      setCustomTasks(customTasks.filter(task => task.id !== taskId));
+      
+      const newCompleted = new Set(completedTasks);
+      newCompleted.delete(taskId);
+      setCompletedTasks(newCompleted);
+      
+      const newActualCosts = new Map(actualCosts);
+      newActualCosts.delete(taskId);
+      setActualCosts(newActualCosts);
+    }
+  };
+
+  const addNewTask = (newTaskData) => {
+    const task = {
+      id: `custom_${Date.now()}`,
+      name: newTaskData.name,
+      phase: newTaskData.phase,
+      critical: newTaskData.critical,
+      trades: newTaskData.trades.split(',').map(t => t.trim()).filter(t => t),
+      cost: parseFloat(newTaskData.cost) || 0,
+      days: parseInt(newTaskData.days) || 1,
+      isTemplate: false
+    };
+    
+    setCustomTasks([...customTasks, task]);
+    setShowAddTask(false);
+  };
+
   // Budget calculations
-  const getTotalBudgeted = () => masterTaskList.reduce((sum, task) => sum + task.cost, 0);
+  const getTotalBudgeted = () => allTasks.reduce((sum, task) => sum + task.cost, 0);
   const getTotalActual = () => Array.from(actualCosts.values()).reduce((sum, cost) => sum + cost, 0);
   const getTotalVariance = () => getTotalActual() - getTotalBudgeted();
 
-  // Calculate progress for current phase
+  // Project phases - dynamically filter tasks
+  const phases = {
+    phase1: {
+      name: 'Main Floor Habitability (Sep 15 - Oct 1)',
+      deadline: 'Oct 1, 2025',
+      budget: 29000,
+      color: 'bg-red-100 border-red-300',
+      priority: 'CRITICAL',
+      description: 'Get main floors rented ASAP - $1,354/month savings!',
+      tasks: allTasks.filter(task => task.phase === 'Safety')
+    },
+    phase2: {
+      name: 'Suite Permits & Design (Oct 1 - Nov 1)',
+      deadline: 'Nov 1, 2025',
+      budget: 7500,
+      color: 'bg-yellow-100 border-yellow-300',
+      priority: 'CRITICAL',
+      description: 'Fast-track permits for simultaneous construction',
+      tasks: allTasks.filter(task => task.phase === 'Permits')
+    },
+    phase3: {
+      name: 'Simultaneous Rough-In (Both Suites) (Nov 1 - Dec 20)',
+      deadline: 'Dec 20, 2025',
+      budget: 32000,
+      color: 'bg-blue-100 border-blue-300',
+      priority: 'HIGH',
+      description: 'Maximum efficiency - both suites together',
+      tasks: allTasks.filter(task => task.phase === 'Rough-in')
+    },
+    phase4: {
+      name: 'Suite 11832 Finish (Dec 20 - Jan 20)',
+      deadline: 'Jan 20, 2026',
+      budget: 17700,
+      color: 'bg-green-100 border-green-300',
+      priority: 'MEDIUM',
+      description: 'Complete first suite for immediate rental',
+      tasks: allTasks.filter(task => task.phase === 'Finish 11832')
+    },
+    phase5: {
+      name: 'Suite 11834 Finish (Jan 20 - Jan 31)',
+      deadline: 'Jan 31, 2026',
+      budget: 15800,
+      color: 'bg-purple-100 border-purple-300',
+      priority: 'MEDIUM',
+      description: 'Complete second suite to maximize income',
+      tasks: allTasks.filter(task => ['Finish 11834', 'Completion', 'Custom'].includes(task.phase))
+    }
+  };
+
   const currentPhase = phases[selectedPhase];
   const completedCount = currentPhase.tasks.filter(task => completedTasks.has(task.id)).length;
   const progressPercent = Math.round((completedCount / currentPhase.tasks.length) * 100);
 
-  // Calculate total project stats
   const totalBudget = Object.values(phases).reduce((sum, phase) => sum + phase.budget, 0);
   const totalSpent = getTotalActual();
 
-  // Get next week's tasks
   const getNextWeekTasks = () => {
     const nextTasks = [];
-    for (const task of masterTaskList) {
+    for (const task of allTasks) {
       if (!completedTasks.has(task.id) && nextTasks.length < 7) {
         nextTasks.push(task);
       }
@@ -288,7 +361,6 @@ const DuplexProjectManager = () => {
     return diffDays;
   };
 
-  // Calculate timeline milestones with updated rates
   const getTimelineMilestones = () => {
     return [
       { date: 'Oct 1', event: 'Main floors rented', income: 3500, loss: -1354 },
@@ -296,6 +368,240 @@ const DuplexProjectManager = () => {
       { date: 'Jan 31', event: 'Both suites complete', income: 5700, loss: 846 },
       { date: 'Mar 1', event: 'Refinance complete', income: 5700, surplus: 2500 }
     ];
+  };
+
+  // Add Task Form Component
+  const AddTaskForm = () => {
+    const [newTask, setNewTask] = useState({
+      name: '',
+      phase: 'Custom',
+      critical: false,
+      trades: '',
+      cost: '',
+      days: '1'
+    });
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      if (newTask.name.trim()) {
+        addNewTask(newTask);
+        setNewTask({
+          name: '',
+          phase: 'Custom',
+          critical: false,
+          trades: '',
+          cost: '',
+          days: '1'
+        });
+      }
+    };
+
+    return (
+      <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+        <h3 className="font-bold text-lg mb-4 text-blue-800 flex items-center">
+          <Plus className="mr-2" size={20} />
+          Add New Task
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Task Name *</label>
+              <input
+                type="text"
+                value={newTask.name}
+                onChange={(e) => setNewTask({...newTask, name: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter task name"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
+              <select
+                value={newTask.phase}
+                onChange={(e) => setNewTask({...newTask, phase: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {availablePhases.map(phase => (
+                  <option key={phase} value={phase}>{phase}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Trades/Tags</label>
+              <input
+                type="text"
+                value={newTask.trades}
+                onChange={(e) => setNewTask({...newTask, trades: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Engineer, Plumber, etc."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Cost ($)</label>
+              <input
+                type="number"
+                value={newTask.cost}
+                onChange={(e) => setNewTask({...newTask, cost: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0"
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duration (days)</label>
+              <input
+                type="number"
+                value={newTask.days}
+                onChange={(e) => setNewTask({...newTask, days: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min="1"
+              />
+            </div>
+            <div className="flex items-center pt-6">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={newTask.critical}
+                  onChange={(e) => setNewTask({...newTask, critical: e.target.checked})}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">Critical Task</span>
+              </label>
+            </div>
+          </div>
+          <div className="flex space-x-3">
+            <button
+              type="submit"
+              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center"
+            >
+              <Save className="mr-2" size={16} />
+              Add Task
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddTask(false)}
+              className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center"
+            >
+              <X className="mr-2" size={16} />
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
+  // Edit Task Form Component
+  const EditTaskForm = () => {
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      saveTaskEdit();
+    };
+
+    return (
+      <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+        <h3 className="font-bold text-lg mb-4 text-yellow-800 flex items-center">
+          <Edit3 className="mr-2" size={20} />
+          Edit Task
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Task Name *</label>
+              <input
+                type="text"
+                value={editingTask.name}
+                onChange={(e) => setEditingTask({...editingTask, name: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                required
+                disabled={editingTask.isTemplate}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phase</label>
+              <select
+                value={editingTask.phase}
+                onChange={(e) => setEditingTask({...editingTask, phase: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                disabled={editingTask.isTemplate}
+              >
+                {availablePhases.map(phase => (
+                  <option key={phase} value={phase}>{phase}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Trades/Tags</label>
+              <input
+                type="text"
+                value={editingTask.tradesString}
+                onChange={(e) => setEditingTask({...editingTask, tradesString: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                placeholder="Engineer, Plumber, etc."
+                disabled={editingTask.isTemplate}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Cost ($)</label>
+              <input
+                type="number"
+                value={editingTask.cost}
+                onChange={(e) => setEditingTask({...editingTask, cost: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duration (days)</label>
+              <input
+                type="number"
+                value={editingTask.days}
+                onChange={(e) => setEditingTask({...editingTask, days: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                min="1"
+              />
+            </div>
+            <div className="flex items-center pt-6">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={editingTask.critical}
+                  onChange={(e) => setEditingTask({...editingTask, critical: e.target.checked})}
+                  className="mr-2"
+                  disabled={editingTask.isTemplate}
+                />
+                <span className="text-sm font-medium text-gray-700">Critical Task</span>
+              </label>
+            </div>
+          </div>
+          {editingTask.isTemplate && (
+            <div className="bg-red-50 border border-red-200 rounded p-3">
+              <p className="text-sm text-red-700">⚠️ Template tasks are protected. Only cost and duration can be edited.</p>
+            </div>
+          )}
+          <div className="flex space-x-3">
+            <button
+              type="submit"
+              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center"
+            >
+              <Save className="mr-2" size={16} />
+              Save Changes
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center"
+            >
+              <X className="mr-2" size={16} />
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    );
   };
 
   // Simple Gantt Chart component
@@ -346,7 +652,6 @@ const DuplexProjectManager = () => {
     
     return (
       <div className="space-y-4">
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-blue-50 p-4 rounded-lg">
             <div className="text-blue-600 font-semibold text-sm">Total Budgeted</div>
@@ -372,33 +677,20 @@ const DuplexProjectManager = () => {
           </div>
         </div>
 
-        {/* Budget Table */}
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white border border-gray-200 rounded-lg">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Item
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Phase
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Budgeted Cost
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actual Cost
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Difference
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phase</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Budgeted Cost</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actual Cost</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Difference</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {masterTaskList.map((task, index) => {
+              {allTasks.map((task, index) => {
                 const actualCost = actualCosts.get(task.id) || 0;
                 const difference = actualCost - task.cost;
                 const isCompleted = completedTasks.has(task.id);
@@ -414,6 +706,7 @@ const DuplexProjectManager = () => {
                           </div>
                           <div className="text-xs text-gray-500">
                             {task.trades.join(', ')}
+                            {!task.isTemplate && <span className="ml-2 text-blue-600 font-semibold">(Custom)</span>}
                           </div>
                         </div>
                       </div>
@@ -468,46 +761,20 @@ const DuplexProjectManager = () => {
             </tbody>
           </table>
         </div>
-
-        {/* Phase Summary */}
-        <div className="mt-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Budget by Phase</h3>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {Object.entries(phases).map(([key, phase]) => {
-              const phaseBudgeted = phase.tasks.reduce((sum, task) => sum + task.cost, 0);
-              const phaseActual = phase.tasks.reduce((sum, task) => sum + (actualCosts.get(task.id) || 0), 0);
-              const phaseVariance = phaseActual - phaseBudgeted;
-              
-              return (
-                <div key={key} className={`p-4 rounded-lg border-2 ${phase.color}`}>
-                  <h4 className="font-bold text-sm mb-2">{phase.name.split('(')[0]}</h4>
-                  <div className="space-y-1 text-xs">
-                    <div>Budgeted: ${phaseBudgeted.toLocaleString()}</div>
-                    <div>Actual: ${phaseActual.toLocaleString()}</div>
-                    <div className={`font-bold ${phaseVariance >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      Variance: {phaseVariance >= 0 ? '+' : ''}${phaseVariance.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
     );
   };
 
   return (
     <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
-      {/* Header with Updated Financial Reality */}
+      {/* Header */}
       <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-bold text-gray-800 flex items-center">
             <Building className="mr-3 text-blue-600" />
-            Duplex Cash Flow Recovery Plan
+            Duplex Project Manager - Now Fully Editable!
           </h1>
           
-          {/* Export/Import Buttons */}
           <div className="flex items-center space-x-3">
             <button
               onClick={exportData}
@@ -529,11 +796,10 @@ const DuplexProjectManager = () => {
           </div>
         </div>
         
-        {/* Updated Financial Alert */}
         <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-4">
           <div className="flex items-center mb-2">
             <TrendingUp className="text-green-600 mr-2" size={20} />
-            <span className="font-bold text-green-800">AUTO-SAVE ENABLED: Your progress saves automatically!</span>
+            <span className="font-bold text-green-800">✨ NEW: Add, Edit & Delete Tasks!</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
             <div>
@@ -553,9 +819,6 @@ const DuplexProjectManager = () => {
               <div className="font-bold text-green-800">+${postRefiSurplus.toLocaleString()}</div>
             </div>
           </div>
-          <div className="mt-2 text-sm text-green-700">
-            <strong>Strategy:</strong> $1,354/month loss is manageable → Build suites → Refinance → $2,500/month surplus! 🎯
-          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -569,11 +832,11 @@ const DuplexProjectManager = () => {
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
-              <span className="text-green-600 font-semibold">Remaining</span>
+              <span className="text-green-600 font-semibold">Custom Tasks</span>
               <Target className="text-green-600" size={20} />
             </div>
-            <div className="text-2xl font-bold text-green-800">${(totalBudget - totalSpent).toLocaleString()}</div>
-            <div className="text-sm text-green-600">{Math.round((totalSpent/totalBudget)*100)}% used</div>
+            <div className="text-2xl font-bold text-green-800">{customTasks.length}</div>
+            <div className="text-sm text-green-600">Added by you</div>
           </div>
           <div className="bg-yellow-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
@@ -610,7 +873,6 @@ const DuplexProjectManager = () => {
           </button>
         </div>
         
-        {/* Always show summary */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div className="bg-blue-50 p-3 rounded-lg">
             <div className="text-blue-600 font-semibold text-sm">Total Budgeted</div>
@@ -639,10 +901,7 @@ const DuplexProjectManager = () => {
         {showBudgetTracker && <BudgetTracker />}
       </div>
 
-      {/* Rest of the component stays the same... */}
-      {/* I'll include the remaining sections for completeness */}
-      
-      {/* Gantt Chart Toggle */}
+      {/* Gantt Chart */}
       <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-gray-800">Project Timeline</h2>
@@ -727,6 +986,11 @@ const DuplexProjectManager = () => {
                           CRITICAL
                         </div>
                       )}
+                      {!task.isTemplate && (
+                        <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded inline-block font-bold">
+                          CUSTOM
+                        </div>
+                      )}
                     </div>
                   </div>
                   {isCompleted ? (
@@ -741,63 +1005,109 @@ const DuplexProjectManager = () => {
         </div>
       </div>
 
-      {/* Master Task List - Collapsible */}
+      {/* Editable Task List */}
       <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-gray-800 flex items-center">
             <List className="mr-2 text-blue-500" />
-            Complete Project Task List (Execution Order)
+            Complete Project Task List (✨ Now Editable!)
           </h2>
-          <button 
-            onClick={() => setShowMasterTasks(!showMasterTasks)}
-            className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center"
-          >
-            {showMasterTasks ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-            {showMasterTasks ? 'Collapse' : 'Expand'} All Tasks
-          </button>
+          <div className="flex space-x-3">
+            <button 
+              onClick={() => setShowAddTask(!showAddTask)}
+              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center"
+            >
+              <Plus className="mr-2" size={20} />
+              Add Task
+            </button>
+            <button 
+              onClick={() => setShowMasterTasks(!showMasterTasks)}
+              className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 flex items-center"
+            >
+              {showMasterTasks ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+              {showMasterTasks ? 'Collapse' : 'Expand'} All Tasks
+            </button>
+          </div>
         </div>
         
+        {showAddTask && <AddTaskForm />}
+        {editingTask && <EditTaskForm />}
+        
         {showMasterTasks && (
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {masterTaskList.map((task, index) => {
+          <div className="space-y-2 max-h-96 overflow-y-auto mt-4">
+            {allTasks.map((task, index) => {
               const isCompleted = completedTasks.has(task.id);
+              const isEditing = editingTask && editingTask.id === task.id;
+              
+              if (isEditing) return null;
               
               return (
                 <div
                   key={task.id}
-                  className={`p-3 rounded-lg border transition-all cursor-pointer ${
+                  className={`p-3 rounded-lg border transition-all ${
                     isCompleted 
                       ? 'bg-green-50 border-green-200' 
                       : task.critical 
                         ? 'bg-red-50 border-red-200' 
                         : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                   }`}
-                  onClick={() => toggleTask(task.id)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3 flex-grow">
                       <div className="w-8 text-xs font-bold text-gray-500">#{index + 1}</div>
-                      {isCompleted ? (
-                        <CheckCircle className="text-green-600" size={20} />
-                      ) : (
-                        <Circle className="text-gray-400" size={20} />
-                      )}
-                      <div className="flex-grow">
-                        <h3 className={`font-medium text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                          {task.name}
-                        </h3>
-                        <div className="flex items-center space-x-3 mt-1 flex-wrap">
-                          <span className="text-xs bg-blue-100 px-2 py-1 rounded">{task.phase}</span>
-                          <span className="text-xs text-gray-600">${task.cost.toLocaleString()}</span>
-                          <span className="text-xs text-gray-600">{task.days}d</span>
-                          <span className="text-xs bg-purple-100 px-2 py-1 rounded">
-                            {task.trades.join(', ')}
-                          </span>
-                          {task.critical && !isCompleted && (
-                            <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-bold">CRITICAL</span>
-                          )}
+                      <div 
+                        className="cursor-pointer flex items-center space-x-3 flex-grow"
+                        onClick={() => toggleTask(task.id)}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle className="text-green-600" size={20} />
+                        ) : (
+                          <Circle className="text-gray-400" size={20} />
+                        )}
+                        <div className="flex-grow">
+                          <h3 className={`font-medium text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                            {task.name}
+                          </h3>
+                          <div className="flex items-center space-x-3 mt-1 flex-wrap">
+                            <span className="text-xs bg-blue-100 px-2 py-1 rounded">{task.phase}</span>
+                            <span className="text-xs text-gray-600">${task.cost.toLocaleString()}</span>
+                            <span className="text-xs text-gray-600">{task.days}d</span>
+                            <span className="text-xs bg-purple-100 px-2 py-1 rounded">
+                              {task.trades.join(', ')}
+                            </span>
+                            {task.critical && !isCompleted && (
+                              <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-bold">CRITICAL</span>
+                            )}
+                            {!task.isTemplate && (
+                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-bold">CUSTOM</span>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    </div>
+                    <div className="flex items-center space-x-2 ml-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditingTask(task);
+                        }}
+                        className="text-blue-500 hover:text-blue-700 p-1"
+                        title="Edit task"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                      {!task.isTemplate && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteTask(task.id);
+                          }}
+                          className="text-red-500 hover:text-red-700 p-1"
+                          title="Delete task"
+                        >
+                          <Minus size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -813,7 +1123,7 @@ const DuplexProjectManager = () => {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           {Object.entries(phases).map(([key, phase]) => {
             const phaseCompleted = phase.tasks.filter(task => completedTasks.has(task.id)).length;
-            const phaseProgress = Math.round((phaseCompleted / phase.tasks.length) * 100);
+            const phaseProgress = phase.tasks.length > 0 ? Math.round((phaseCompleted / phase.tasks.length) * 100) : 0;
             
             return (
               <button
@@ -833,6 +1143,7 @@ const DuplexProjectManager = () => {
                 </div>
                 <div className="text-xs font-medium">{phaseProgress}%</div>
                 <div className="text-xs text-gray-600">${phase.budget.toLocaleString()}</div>
+                <div className="text-xs text-gray-500">{phase.tasks.length} tasks</div>
               </button>
             );
           })}
@@ -847,6 +1158,13 @@ const DuplexProjectManager = () => {
             <p className="text-gray-600 mt-1">{currentPhase.description}</p>
           </div>
           <div className="flex items-center space-x-4">
+            <button 
+              onClick={() => setShowAddTask(!showAddTask)}
+              className="bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 flex items-center text-sm"
+            >
+              <Plus className="mr-1" size={16} />
+              Add Task
+            </button>
             <span className={`px-3 py-1 rounded-full text-sm font-bold ${
               currentPhase.priority === 'CRITICAL' ? 'bg-red-100 text-red-800' :
               currentPhase.priority === 'HIGH' ? 'bg-yellow-100 text-yellow-800' :
@@ -868,47 +1186,94 @@ const DuplexProjectManager = () => {
         <div className="space-y-3">
           {currentPhase.tasks.map((task) => {
             const isCompleted = completedTasks.has(task.id);
+            const isEditing = editingTask && editingTask.id === task.id;
+            
+            if (isEditing) return null;
             
             return (
               <div
                 key={task.id}
-                className={`p-4 rounded-lg border transition-all cursor-pointer ${
+                className={`p-4 rounded-lg border transition-all ${
                   isCompleted 
                     ? 'bg-green-50 border-green-200' 
                     : task.critical 
                       ? 'bg-red-50 border-red-200' 
                       : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                 }`}
-                onClick={() => toggleTask(task.id)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3 flex-grow">
-                    {isCompleted ? (
-                      <CheckCircle className="text-green-600" size={24} />
-                    ) : (
-                      <Circle className="text-gray-400" size={24} />
-                    )}
-                    <div className="flex-grow">
-                      <h3 className={`font-medium ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                        {task.name}
-                      </h3>
-                      <div className="flex items-center space-x-4 mt-1 flex-wrap">
-                        <span className="text-sm text-gray-600">Cost: ${task.cost.toLocaleString()}</span>
-                        <span className="text-sm text-gray-600">Duration: {task.days} days</span>
-                        <span className="text-xs bg-purple-100 px-2 py-1 rounded">
-                          {task.trades.join(', ')}
-                        </span>
-                        {task.critical && !isCompleted && (
-                          <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-bold">CRITICAL</span>
-                        )}
+                    <div 
+                      className="cursor-pointer flex items-center space-x-3 flex-grow"
+                      onClick={() => toggleTask(task.id)}
+                    >
+                      {isCompleted ? (
+                        <CheckCircle className="text-green-600" size={24} />
+                      ) : (
+                        <Circle className="text-gray-400" size={24} />
+                      )}
+                      <div className="flex-grow">
+                        <h3 className={`font-medium ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                          {task.name}
+                        </h3>
+                        <div className="flex items-center space-x-4 mt-1 flex-wrap">
+                          <span className="text-sm text-gray-600">Cost: ${task.cost.toLocaleString()}</span>
+                          <span className="text-sm text-gray-600">Duration: {task.days} days</span>
+                          <span className="text-xs bg-purple-100 px-2 py-1 rounded">
+                            {task.trades.join(', ')}
+                          </span>
+                          {task.critical && !isCompleted && (
+                            <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-bold">CRITICAL</span>
+                          )}
+                          {!task.isTemplate && (
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-bold">CUSTOM</span>
+                          )}
+                        </div>
                       </div>
                     </div>
+                  </div>
+                  <div className="flex items-center space-x-2 ml-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditingTask(task);
+                      }}
+                      className="text-blue-500 hover:text-blue-700 p-1"
+                      title="Edit task"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    {!task.isTemplate && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteTask(task.id);
+                        }}
+                        className="text-red-500 hover:text-red-700 p-1"
+                        title="Delete task"
+                      >
+                        <Minus size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
+
+        {currentPhase.tasks.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <p className="mb-4">No tasks in this phase yet.</p>
+            <button 
+              onClick={() => setShowAddTask(true)}
+              className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 flex items-center mx-auto"
+            >
+              <Plus className="mr-2" size={16} />
+              Add Your First Task
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 p-4 bg-gray-100 rounded-lg">
           <div className="flex justify-between items-center">
